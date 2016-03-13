@@ -86,6 +86,31 @@ extension BarcodeReaderController {
 
 extension BarcodeReaderController : AVCaptureMetadataOutputObjectsDelegate {
     func captureOutput(captureOutput: AVCaptureOutput!, didOutputMetadataObjects metadataObjects: [AnyObject]!, fromConnection connection: AVCaptureConnection!) {
+        guard let barcode = metadataObjects.first as? AVMetadataMachineReadableCodeObject else {
+            return
+        }
+
+        stopCaptureSession()
+
+        dispatch_async(dispatch_get_main_queue()) {
+            self.barcodeDidFind(barcode)
+        }
+    }
+
+    func barcodeDidFind(barcode: AVMetadataMachineReadableCodeObject) {
+        if nil != presentedViewController {
+            // A barcode alert already presented
+            return
+        }
+
+        let alertMessage = "Type: \(barcode.type)\nValue: \(barcode.stringValue)"
+        let alert = UIAlertController(title: nil, message: alertMessage, preferredStyle: .Alert)
+        let closeAction = UIAlertAction(title: "Close", style: .Default) { _ in
+            self.startCaptureSession()
+        }
+        alert.addAction(closeAction)
+
+        presentViewController(alert, animated: true, completion: nil)
     }
 }
 
