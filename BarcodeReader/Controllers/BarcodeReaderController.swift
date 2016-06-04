@@ -9,16 +9,18 @@
 import AVFoundation
 import UIKit
 
-class BarcodeReaderController : UIViewController {
+class BarcodeReaderController: UIViewController {
+    // MARK: - Properties
+
     private let sessionOutputMetadataObjectsQueue = dispatch_queue_create("com.mbelsky.BarcodeReader.BarcodeReaderController.sessionOutputMetadataObjectsQueue", DISPATCH_QUEUE_SERIAL)
     private var captureSession: AVCaptureSession?
 
+    // MARK: - Lifecycle
+
     override func viewWillAppear(animated: Bool) {
         super.viewWillAppear(animated)
-        NSNotificationCenter.defaultCenter().addObserver(self, selector: "applicationDidBecomeActiveNotification:", name: UIApplicationDidBecomeActiveNotification, object: nil)
-        NSNotificationCenter.defaultCenter().addObserver(self, selector: "applicationWillResignActiveNotification:", name: UIApplicationWillResignActiveNotification, object: nil)
-
-        startCaptureSession()
+        NSNotificationCenter.defaultCenter().addObserver(self, selector: #selector(applicationDidBecomeActiveNotification), name: UIApplicationDidBecomeActiveNotification, object: nil)
+        NSNotificationCenter.defaultCenter().addObserver(self, selector: #selector(applicationWillResignActiveNotification), name: UIApplicationWillResignActiveNotification, object: nil)
     }
 
     override func viewWillDisappear(animated: Bool) {
@@ -30,7 +32,7 @@ class BarcodeReaderController : UIViewController {
     }
 
     func applicationDidBecomeActiveNotification(_:AnyObject) {
-        startCaptureSession()
+        checkCameraAuthorizationStatus()
     }
 
     func applicationWillResignActiveNotification(_:AnyObject) {
@@ -38,6 +40,7 @@ class BarcodeReaderController : UIViewController {
     }
 }
 
+// MARK: - Manage captureSession
 extension BarcodeReaderController {
     private func startCaptureSession() {
         prepareCaptureSession()
@@ -71,7 +74,10 @@ extension BarcodeReaderController {
         captureSession.addInput(sessionInput)
         captureSession.addOutput(sessionOutput)
 
-        sessionOutput.metadataObjectTypes = [AVMetadataObjectTypeCode39Code, AVMetadataObjectTypeCode39Mod43Code, AVMetadataObjectTypeCode93Code, AVMetadataObjectTypeCode128Code, AVMetadataObjectTypeEAN8Code, AVMetadataObjectTypeEAN13Code, AVMetadataObjectTypeITF14Code, AVMetadataObjectTypeUPCECode]
+        sessionOutput.metadataObjectTypes = [AVMetadataObjectTypeCode39Code, AVMetadataObjectTypeCode39Mod43Code,
+                                             AVMetadataObjectTypeCode93Code, AVMetadataObjectTypeCode128Code,
+                                             AVMetadataObjectTypeEAN8Code, AVMetadataObjectTypeEAN13Code,
+                                             AVMetadataObjectTypeITF14Code, AVMetadataObjectTypeUPCECode]
         sessionOutput.setMetadataObjectsDelegate(self, queue: sessionOutputMetadataObjectsQueue)
 
         let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
@@ -84,7 +90,8 @@ extension BarcodeReaderController {
     }
 }
 
-extension BarcodeReaderController : AVCaptureMetadataOutputObjectsDelegate {
+// MARK: - AVCaptureMetadataOutputObjectsDelegate
+extension BarcodeReaderController: AVCaptureMetadataOutputObjectsDelegate {
     func captureOutput(captureOutput: AVCaptureOutput!, didOutputMetadataObjects metadataObjects: [AnyObject]!, fromConnection connection: AVCaptureConnection!) {
         guard let barcode = metadataObjects.first as? AVMetadataMachineReadableCodeObject else {
             return
@@ -114,3 +121,40 @@ extension BarcodeReaderController : AVCaptureMetadataOutputObjectsDelegate {
     }
 }
 
+// MARK: - Manage Camera Permission
+extension BarcodeReaderController {
+    private func checkCameraAuthorizationStatus() {
+        let authorizationStatus = AVCaptureDevice.authorizationStatusForMediaType(AVMediaTypeVideo)
+        switch authorizationStatus {
+        case .Authorized:
+            startCaptureSession()
+        case .NotDetermined:
+            requestCameraPermission()
+        default:
+            showAppNeedsCameraAlert()
+        }
+    }
+
+    private func requestCameraPermission() {
+        AVCaptureDevice.requestAccessForMediaType(AVMediaTypeVideo) { granted in
+            dispatch_async(dispatch_get_main_queue()) {
+                self.checkCameraAuthorizationStatus()
+            }
+        }
+    }
+
+    private func showAppNeedsCameraAlert() {
+        if nil != presentedViewController {
+            // Alert was presented
+            return
+        }
+
+        let alert = UIAlertController(title: "Camera is disabled", message: "This app needs access to your device camera. Please turn on Camera in your device settings.", preferredStyle: .Alert)
+        let settingsAction = UIAlertAction(title: "Go to Settings", style: .Default) { _ in
+            UIApplication.sharedApplication().openURL(NSURL(string: UIApplicationOpenSettingsURLString)!)
+        }
+        alert.addAction(settingsAction)
+
+        presentViewController(alert, animated: true, completion: nil)
+    }
+}
