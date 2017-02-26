@@ -12,58 +12,57 @@ import UIKit
 class BarcodeReaderController: UIViewController {
     // MARK: - Properties
 
-    private let sessionOutputMetadataObjectsQueue = dispatch_queue_create("com.mbelsky.BarcodeReader.BarcodeReaderController.sessionOutputMetadataObjectsQueue", DISPATCH_QUEUE_SERIAL)
-    private var captureSession: AVCaptureSession?
+    fileprivate let sessionOutputMetadataObjectsQueue = DispatchQueue(label: "com.mbelsky.BarcodeReader.BarcodeReaderController.sessionOutputMetadataObjectsQueue", attributes: [])
+    fileprivate var captureSession: AVCaptureSession?
 
     // MARK: - Lifecycle
 
-    override func viewWillAppear(animated: Bool) {
+    override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        NSNotificationCenter.defaultCenter().addObserver(self, selector: #selector(applicationDidBecomeActiveNotification), name: UIApplicationDidBecomeActiveNotification, object: nil)
-        NSNotificationCenter.defaultCenter().addObserver(self, selector: #selector(applicationWillResignActiveNotification), name: UIApplicationWillResignActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationDidBecomeActiveNotification), name: .UIApplicationDidBecomeActive, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationWillResignActiveNotification), name: .UIApplicationWillResignActive, object: nil)
     }
 
-    override func viewWillDisappear(animated: Bool) {
+    override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        NSNotificationCenter.defaultCenter().removeObserver(self, name: UIApplicationDidBecomeActiveNotification, object: nil)
-        NSNotificationCenter.defaultCenter().removeObserver(self, name: UIApplicationWillResignActiveNotification, object: nil)
+        NotificationCenter.default.removeObserver(self)
 
         stopCaptureSession()
     }
 
-    func applicationDidBecomeActiveNotification(_:AnyObject) {
+    func applicationDidBecomeActiveNotification(_: AnyObject) {
         checkCameraAuthorizationStatus()
     }
 
-    func applicationWillResignActiveNotification(_:AnyObject) {
+    func applicationWillResignActiveNotification(_: AnyObject) {
         stopCaptureSession()
     }
 }
 
 // MARK: - Manage captureSession
 extension BarcodeReaderController {
-    private func startCaptureSession() {
+    fileprivate func startCaptureSession() {
         prepareCaptureSession()
-        dispatch_async(sessionOutputMetadataObjectsQueue) {
+        sessionOutputMetadataObjectsQueue.async {
             self.captureSession?.startRunning()
         }
     }
 
-    private func stopCaptureSession() {
-        dispatch_async(sessionOutputMetadataObjectsQueue) {
+    fileprivate func stopCaptureSession() {
+        sessionOutputMetadataObjectsQueue.async {
             self.captureSession?.stopRunning()
         }
     }
 
-    private func prepareCaptureSession() {
+    fileprivate func prepareCaptureSession() {
         if nil != self.captureSession {
             return
         }
 
         let captureSession = AVCaptureSession();
 
-        let videoDevice = AVCaptureDevice.defaultDeviceWithMediaType(AVMediaTypeVideo)
-        guard let sessionInput = try? AVCaptureDeviceInput(device: videoDevice) where captureSession.canAddInput(sessionInput) else {
+        let videoDevice = AVCaptureDevice.defaultDevice(withMediaType: AVMediaTypeVideo)
+        guard let sessionInput = try? AVCaptureDeviceInput(device: videoDevice), captureSession.canAddInput(sessionInput) else {
             return
         }
         let sessionOutput = AVCaptureMetadataOutput()
@@ -80,11 +79,12 @@ extension BarcodeReaderController {
                                              AVMetadataObjectTypeITF14Code, AVMetadataObjectTypeUPCECode]
         sessionOutput.setMetadataObjectsDelegate(self, queue: sessionOutputMetadataObjectsQueue)
 
-        let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-        previewLayer.frame = self.view.bounds
-        previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill
-
-        self.view.layer.addSublayer(previewLayer)
+        if let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession) {
+            previewLayer.frame = self.view.bounds
+            previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill
+            
+            self.view.layer.addSublayer(previewLayer)
+        }
 
         self.captureSession = captureSession
     }
@@ -92,43 +92,43 @@ extension BarcodeReaderController {
 
 // MARK: - AVCaptureMetadataOutputObjectsDelegate
 extension BarcodeReaderController: AVCaptureMetadataOutputObjectsDelegate {
-    func captureOutput(captureOutput: AVCaptureOutput!, didOutputMetadataObjects metadataObjects: [AnyObject]!, fromConnection connection: AVCaptureConnection!) {
+    func captureOutput(_ captureOutput: AVCaptureOutput!, didOutputMetadataObjects metadataObjects: [Any]!, from connection: AVCaptureConnection!) {
         guard let barcode = metadataObjects.first as? AVMetadataMachineReadableCodeObject else {
             return
         }
 
         stopCaptureSession()
 
-        dispatch_async(dispatch_get_main_queue()) {
+        DispatchQueue.main.async {
             self.barcodeDidFind(barcode)
         }
     }
 
-    func barcodeDidFind(barcode: AVMetadataMachineReadableCodeObject) {
+    func barcodeDidFind(_ barcode: AVMetadataMachineReadableCodeObject) {
         if nil != presentedViewController {
             // A barcode alert already presented
             return
         }
 
-        let alertMessage = "Type: \(barcode.type)\nValue: \(barcode.stringValue)"
-        let alert = UIAlertController(title: nil, message: alertMessage, preferredStyle: .Alert)
-        let closeAction = UIAlertAction(title: "Close", style: .Default) { _ in
+        let alertMessage = "Type: \(barcode.type!)\nValue: \(barcode.stringValue!)"
+        let alert = UIAlertController(title: nil, message: alertMessage, preferredStyle: .alert)
+        let closeAction = UIAlertAction(title: "Close", style: .default) { _ in
             self.startCaptureSession()
         }
         alert.addAction(closeAction)
 
-        presentViewController(alert, animated: true, completion: nil)
+        present(alert, animated: true, completion: nil)
     }
 }
 
 // MARK: - Manage Camera Permission
 extension BarcodeReaderController {
-    private func checkCameraAuthorizationStatus() {
-        let authorizationStatus = AVCaptureDevice.authorizationStatusForMediaType(AVMediaTypeVideo)
+    fileprivate func checkCameraAuthorizationStatus() {
+        let authorizationStatus = AVCaptureDevice.authorizationStatus(forMediaType: AVMediaTypeVideo)
         switch authorizationStatus {
-        case .Authorized:
+        case .authorized:
             startCaptureSession()
-        case .NotDetermined:
+        case .notDetermined:
             requestCameraPermission()
         default:
             showAppNeedsCameraAlert()
@@ -136,8 +136,8 @@ extension BarcodeReaderController {
     }
 
     private func requestCameraPermission() {
-        AVCaptureDevice.requestAccessForMediaType(AVMediaTypeVideo) { granted in
-            dispatch_async(dispatch_get_main_queue()) {
+        AVCaptureDevice.requestAccess(forMediaType: AVMediaTypeVideo) { granted in
+            DispatchQueue.main.async {
                 self.checkCameraAuthorizationStatus()
             }
         }
@@ -149,12 +149,12 @@ extension BarcodeReaderController {
             return
         }
 
-        let alert = UIAlertController(title: "Camera is disabled", message: "This app needs access to your device camera. Please turn on Camera in your device settings.", preferredStyle: .Alert)
-        let settingsAction = UIAlertAction(title: "Go to Settings", style: .Default) { _ in
-            UIApplication.sharedApplication().openURL(NSURL(string: UIApplicationOpenSettingsURLString)!)
+        let alert = UIAlertController(title: "Camera is disabled", message: "This app needs access to your device camera. Please turn on Camera in your device settings.", preferredStyle: .alert)
+        let settingsAction = UIAlertAction(title: "Go to Settings", style: .default) { _ in
+            UIApplication.shared.openURL(URL(string: UIApplicationOpenSettingsURLString)!)
         }
         alert.addAction(settingsAction)
 
-        presentViewController(alert, animated: true, completion: nil)
+        present(alert, animated: true, completion: nil)
     }
 }
