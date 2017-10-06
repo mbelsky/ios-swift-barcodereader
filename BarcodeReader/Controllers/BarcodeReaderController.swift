@@ -10,6 +10,9 @@ import AVFoundation
 import UIKit
 
 class BarcodeReaderController: UIViewController {
+    // Define metadata object types that might be detected in a picture
+    let metadataObjectTypes: [AVMetadataObject.ObjectType] = [.qr]
+
     fileprivate let sessionQueue = DispatchQueue(label: "sessionQueue")
     fileprivate var captureSession: AVCaptureSession?
 
@@ -85,7 +88,7 @@ extension BarcodeReaderController {
 
         captureSession.addOutput(sessionOutput)
 
-        sessionOutput.metadataObjectTypes = [.qr]
+        sessionOutput.metadataObjectTypes = metadataObjectTypes
         sessionOutput.setMetadataObjectsDelegate(self, queue: sessionQueue)
 
         let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
